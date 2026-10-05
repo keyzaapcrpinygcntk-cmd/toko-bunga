@@ -8,13 +8,10 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Jost:wght@300;400;500;600&display=swap" rel="stylesheet">
-
-<!-- ============ CSS (dari css flower.css) ============ -->
 <link rel="stylesheet" href="css/style.css">
 
-<!-- ============ KONFIGURASI API APPS SCRIPT ============ -->
+<!-- KONFIGURASI API APPS SCRIPT -->
 <script>
-  // URL Web App Apps Script kamu
   window.API_URL = "https://script.google.com/macros/s/AKfycbxOo3dqwaFp_K_3F6wGEF-3NNiF5LoL4nt0PxM5OYmo4BmpI1ixHTRHY5KfAFIbvifHqg/exec";
 </script>
 </head>
@@ -437,33 +434,21 @@
 <!-- ================= TOAST ================= -->
 <div class="toast" id="toast"><span>✓</span><span id="toastMsg">Berhasil</span></div>
 
-<!-- ============ SCRIPTS ============ -->
-<script src="js/script.js"></script>
-<script src="js/orders.js"></script>
+<!-- ============ SCRIPT ============ -->
+<script src="js/app.js"></script>
 
-<!-- ============ SCRIPT INTEGRASI KE APPS SCRIPT ============ -->
+<!-- ============ INTEGRASI KE APPS SCRIPT ============ -->
 <script>
 /* ============================================================
    INTEGRASI KE GOOGLE APPS SCRIPT
-   Semua request dikirim ke API_URL (Web App Apps Script)
    ============================================================ */
-
-/**
- * Kirim pesanan baru ke server Apps Script
- * Dipanggil otomatis dari dalam fungsi addOrder()
- */
 async function syncCreateOrderToServer(order) {
   try {
-    // Pakai mode "no-cors" + text/plain agar tidak kena preflight CORS
-    // (Apps Script tidak support CORS preflight OPTIONS)
     await fetch(window.API_URL, {
       method: "POST",
       mode: "no-cors",
       headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify({
-        action: "create",
-        order: order
-      })
+      body: JSON.stringify({ action: "create", order: order })
     });
     console.log("✅ Pesanan tersinkron ke server:", order.id);
   } catch (err) {
@@ -471,21 +456,13 @@ async function syncCreateOrderToServer(order) {
   }
 }
 
-/**
- * Update status pesanan di server
- */
 async function syncUpdateStatusToServer(id, statusKey, statusLabel) {
   try {
     await fetch(window.API_URL, {
       method: "POST",
       mode: "no-cors",
       headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify({
-        action: "updateStatus",
-        id: id,
-        statusKey: statusKey,
-        statusLabel: statusLabel
-      })
+      body: JSON.stringify({ action: "updateStatus", id, statusKey, statusLabel })
     });
     console.log("✅ Status tersinkron:", id, statusKey);
   } catch (err) {
@@ -493,19 +470,13 @@ async function syncUpdateStatusToServer(id, statusKey, statusLabel) {
   }
 }
 
-/**
- * Hapus pesanan di server
- */
 async function syncDeleteOrderToServer(id) {
   try {
     await fetch(window.API_URL, {
       method: "POST",
       mode: "no-cors",
       headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify({
-        action: "delete",
-        id: id
-      })
+      body: JSON.stringify({ action: "delete", id })
     });
     console.log("✅ Pesanan dihapus dari server:", id);
   } catch (err) {
@@ -513,21 +484,11 @@ async function syncDeleteOrderToServer(id) {
   }
 }
 
-/**
- * Ambil semua pesanan dari server
- * Return: array of orders atau null kalau gagal
- */
 async function fetchOrdersFromServer() {
   try {
-    // GET bisa dibaca response-nya (beda dengan POST no-cors)
-    const res = await fetch(window.API_URL + "?action=list", {
-      method: "GET",
-      mode: "cors"
-    });
+    const res = await fetch(window.API_URL + "?action=list", { method: "GET", mode: "cors" });
     const json = await res.json();
-    if (json && json.ok && Array.isArray(json.data)) {
-      return json.data;
-    }
+    if (json && json.ok && Array.isArray(json.data)) return json.data;
   } catch (err) {
     console.warn("⚠️ Gagal fetch orders:", err);
   }
@@ -535,50 +496,48 @@ async function fetchOrdersFromServer() {
 }
 
 /* ============================================================
-   HOOK KE FUNGSI ASLI — Tanpa mengubah script.js & orders.js
-   Kita "bungkus" fungsi aslinya pakai setTimeout + Proxy
+   HOOK KE FUNGSI ASLI (tanpa mengubah js/app.js)
    ============================================================ */
 window.addEventListener("load", () => {
-  // ---- HOOK addOrder ----
+  // HOOK addOrder
   if (typeof window.addOrder === "function") {
-    const _origAddOrder = window.addOrder;
+    const _orig = window.addOrder;
     window.addOrder = function(order) {
-      _origAddOrder(order);
-      syncCreateOrderToServer(order); // sync ke server
+      _orig(order);
+      syncCreateOrderToServer(order);
     };
   }
 
-  // ---- HOOK markOrderDone ----
+  // HOOK markOrderDone
   if (typeof window.markOrderDone === "function") {
-    const _origMarkDone = window.markOrderDone;
+    const _orig = window.markOrderDone;
     window.markOrderDone = function(id) {
-      _origMarkDone(id);
+      _orig(id);
       if (typeof STATUS_MAP !== "undefined" && STATUS_MAP.done) {
         syncUpdateStatusToServer(id, "done", STATUS_MAP.done.label);
       }
     };
   }
 
-  // ---- HOOK removeOrder ----
+  // HOOK removeOrder
   if (typeof window.removeOrder === "function") {
-    const _origRemove = window.removeOrder;
+    const _orig = window.removeOrder;
     window.removeOrder = function(id) {
-      _origRemove(id);
+      _orig(id);
       syncDeleteOrderToServer(id);
     };
   }
 
-  // ---- HOOK openOrders (sync dari server dulu, baru render) ----
+  // HOOK openOrders → sync dari server dulu
   if (typeof window.openOrders === "function") {
-    const _origOpenOrders = window.openOrders;
+    const _orig = window.openOrders;
     window.openOrders = async function() {
-      // Ambil data terbaru dari server
       const remote = await fetchOrdersFromServer();
       if (remote && typeof saveOrders === "function") {
         saveOrders(remote);
         if (typeof updateOrderBadge === "function") updateOrderBadge();
       }
-      _origOpenOrders();
+      _orig();
     };
   }
 
